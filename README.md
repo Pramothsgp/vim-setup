@@ -5,7 +5,7 @@ Terminal Vim that works like VS Code: a file explorer on the left, open files as
 ## Install
 
 ```bash
-git clone https://github.com/<your-username>/vim-setup.git ~/.vim-setup
+git clone https://github.com/Pramothsgp/vim-setup.git ~/.vim-setup
 ~/.vim-setup/install.sh
 ```
 
