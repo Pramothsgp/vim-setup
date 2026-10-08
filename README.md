@@ -1,6 +1,6 @@
 # vim-setup
 
-Terminal Vim that works like VS Code: a file explorer on the left, open files as tabs along the top, fuzzy file search, project-wide search, go-to-definition, autocomplete, GitHub Copilot suggestions, a Claude Code side panel, Git diff and blame, multiple cursors and a built-in terminal panel. One command sets it up on any Mac or Linux machine.
+Terminal Vim that works like VS Code: a file explorer on the left, open files as tabs along the top, fuzzy file search, project-wide search, go-to-definition, autocomplete, GitHub Copilot suggestions and chat, Claude Code and Copilot CLI side panels, Git diff and blame, multiple cursors and a built-in terminal panel. One command sets it up on any Mac or Linux machine.
 
 ## Install
 
@@ -9,23 +9,36 @@ git clone https://github.com/Pramothsgp/vim-setup.git ~/.vim-setup
 ~/.vim-setup/install.sh
 ```
 
+The installer asks what you want. Every part is optional:
+
+| Setup | What you get | Good for |
+| --- | --- | --- |
+| **Full** | Everything below, including AI | Your main machine |
+| **Developer** | Everything except AI | Machines without AI accounts |
+| **Light** | Explorer, file finder, Git, editing extras | Servers where you still browse code |
+| **Minimal** | Good settings and shortcuts only; no plugins, nothing downloaded | Quick edits over SSH |
+| **Custom** | You pick each part | Anything else |
+
+The parts: theme and file tabs, sidebar explorer, fuzzy finder and project search, editing extras, Git, code intelligence (language servers), Copilot suggestions, Copilot Chat, Claude Code panel, Copilot CLI panel.
+
+It then asks whether to install the packages those parts need (Homebrew on macOS; apt, dnf, pacman, zypper or apk on Linux), whether to install Claude Code or the Copilot CLI if you chose their panels and they're missing, whether to add `EDITOR=vim`, a `v` alias and a `Ctrl-s` fix to your shells (bash, zsh, fish and ksh are all handled), and whether Git should use Vim for commit messages.
+
+Your answers are saved in `~/.vim-setup.conf`. Run `install.sh` again at any time to change them; parts you switch off are removed.
+
+### Without questions (scripts, servers)
+
+```bash
+./install.sh --preset minimal --yes          # quick setup on a remote box
+./install.sh --preset full --yes --install-ai
+./install.sh --yes --without copilot_cli     # keep your choices, drop one part
+./install.sh --help                          # every option
+```
+
 Open a new terminal, then open any project:
 
 ```bash
 vim ~/projects/my-project
 ```
-
-The installer is safe to run again; it only changes what isn't set up yet. It:
-
-1. Installs `vim`, `fzf`, `ripgrep`, `bat`, `git` and `node` with Homebrew (macOS) or apt, dnf or pacman (Linux).
-2. Moves any existing `~/.vimrc` to `~/.vimrc.backup-<date>`, then links `~/.vimrc` to this repo's `vimrc`.
-3. Downloads the plugin manager and all plugins.
-4. Adds `EDITOR=vim`, an alias `v=vim` and a `Ctrl-s` fix to `~/.zshrc` or `~/.bashrc`, and makes Git use Vim for commit messages.
-
-| Option | Does |
-| --- | --- |
-| `--no-deps` | Skip installing packages (no sudo needed) |
-| `--no-shell` | Don't touch shell config or Git settings |
 
 On Windows, use it inside WSL.
 
@@ -48,12 +61,24 @@ Everything else is in **[CHEATSHEET.md](CHEATSHEET.md)**.
 
 ## AI: Copilot and Claude
 
-**GitHub Copilot** shows grey suggestions as you type. Run `:Copilot setup` once in Vim and sign in with GitHub; it needs a Copilot plan (there's a free tier, and verified students get free access). `Tab` accepts a suggestion.
+Each AI part is optional and chosen during install.
 
-**Claude** runs as Claude Code in a panel on the right, where it can read, explain and edit your project. Install it once (needs a Claude Pro, Max, Team, Enterprise or Console account):
+**Copilot suggestions** appear in grey as you type. Run `:Copilot setup` once and sign in with GitHub. Needs Node.js and a Copilot plan (there's a free tier, and verified students get free access).
+
+**Copilot Chat** opens a chat window inside Vim (`Space ai`); select code and press `Space ai` to send it to the chat. It asks you to sign in the first time you open it. Needs Vim 9.
+
+**Claude Code** and the **Copilot CLI** run as agent panels on the right that can read and edit your project. Install them during setup, or yourself:
 
 ```bash
-curl -fsSL https://claude.ai/install.sh | bash
+curl -fsSL https://claude.ai/install.sh | bash        # Claude Code (Claude Pro, Max, Team, Enterprise or Console account)
+brew install --cask copilot-cli                       # Copilot CLI (or: npm install -g @github/copilot)
+```
+
+Vim finds them however they were installed: native installers, Homebrew, npm (including under nvm, fnm, volta, asdf, mise, pnpm or bun), or an alias in your bash, zsh or fish config. If yours lives somewhere unusual, point to it in `~/.vimrc.local`:
+
+```vim
+let g:vim_setup_claude_path = '~/somewhere/claude'
+let g:vim_setup_copilot_path = '~/somewhere/copilot'
 ```
 
 | Keys | Does |
@@ -62,13 +87,15 @@ curl -fsSL https://claude.ai/install.sh | bash
 | `Ctrl-]` | Dismiss the suggestion |
 | `Ctrl-j` / `Ctrl-k` | Next / previous suggestion |
 | `Ctrl-l` | Accept just the next word |
-| `Space ap` | Panel with up to 10 suggestions |
-| `Space ac` | Turn Copilot on / off |
-| `Space aa` | Open / hide the Claude panel |
-| `Space af` | Reference this file in Claude's prompt; in visual mode, the selected lines too |
-| `Ctrl-w h` | From the Claude panel back to the editor |
+| `Space ap` / `Space ac` | Suggestions panel / suggestions on-off |
+| `Space ai` | Open Copilot Chat; in visual mode, send the selection to it |
+| `Space am` | Pick the Copilot Chat model |
+| `Space aa` | Open / hide the Claude Code panel |
+| `Space ag` | Open / hide the Copilot CLI panel |
+| `Space af` | Type `@this/file` (plus selected lines) into the last-used agent panel |
+| `Ctrl-w h` / `Ctrl-w l` | Between the editor and a panel |
 
-Files Claude edits reload in Vim automatically.
+Files the agents edit reload in Vim automatically.
 
 ## Hiding files per project
 
@@ -100,4 +127,4 @@ Because `~/.vimrc` is a link into the repo, edits you make to `vimrc` here take 
 
 ## Requirements
 
-Vim 8.2 or newer (9.x recommended). For copy and paste to reach the system clipboard, Vim needs `+clipboard`: Homebrew's Vim has it, and on Linux desktops the installer picks `vim-gtk3`. Check with `vim --version | grep clipboard`.
+Vim 8.2 or newer (9.x recommended; Copilot Chat needs 9). For copy and paste to reach the system clipboard, Vim needs `+clipboard`: Homebrew's Vim has it, and on Linux desktops the installer picks `vim-gtk3`. Check with `vim --version | grep clipboard`.

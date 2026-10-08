@@ -32,8 +32,10 @@ These come from this repo's `vimrc`; plain Vim doesn't have them.
 | `Space o` / `Space s` | Go to symbol in file / in project |
 | `Space rn` / `Space ca` / `Space F` | Rename / code action / format |
 | `Space d` | List problems in the file |
-| `Space aa` / `Space af` | Claude panel / send this file or selection to Claude |
-| `Space ac` / `Space ap` | Copilot on-off / suggestions panel |
+| `Space aa` / `Space ag` | Claude Code panel / Copilot CLI panel |
+| `Space af` | Send this file or selection to the last-used agent panel |
+| `Space ai` | Copilot Chat (visual: send selection) |
+| `Space ac` / `Space ap` | Copilot suggestions on-off / suggestions panel |
 | `jk` (insert mode) | Back to Normal mode |
 | `J` / `K` (visual mode) | Move selected lines down / up |
 
@@ -533,20 +535,31 @@ Run `:Copilot setup` once and sign in with GitHub.
 
 If the autocomplete menu is open, `Tab` moves through the menu instead; press `Ctrl-e` to close the menu, then `Tab` takes Copilot's suggestion.
 
-### Claude Code (side panel)
+### Copilot Chat (chat window)
 
 | Keys | Does |
 | --- | --- |
-| `Space aa` | Open / hide the Claude panel on the right |
-| `Space af` | Type `@this/file.py` into Claude's prompt, ready for your question |
-| `Space af` (visual) | Same, plus the selected line numbers |
-| `Ctrl-w h` | From the Claude panel back to the editor |
-| `Ctrl-w l` | From the editor into the Claude panel |
-| `Esc` (in the panel) | Interrupt Claude |
-| `Shift-Tab` (in the panel) | Cycle Claude's permission modes, e.g. plan mode |
-| `/` (in the panel) | Claude's commands, e.g. `/clear`, `/resume` |
+| `Space ai` | Open the chat (signs in the first time) |
+| `Space ai` (visual) | Send the selected code to the chat |
+| `Enter` (normal mode, in chat) | Send your message |
+| `#file:` (in chat) | Attach a project file; Tab completes |
+| `Space am` | Pick the model |
+| `:CopilotChatReset` / `:CopilotChatSave name` / `:CopilotChatLoad name` | New chat / save / reopen a chat |
 
-Files Claude changes reload in Vim automatically when you move back to them.
+### Claude Code and Copilot CLI (agent panels)
+
+| Keys | Does |
+| --- | --- |
+| `Space aa` | Open / hide the Claude Code panel on the right |
+| `Space ag` | Open / hide the Copilot CLI panel |
+| `Space af` | Type `@this/file.py` into the last-used panel, ready for your question |
+| `Space af` (visual) | Same, plus the selected line numbers |
+| `Ctrl-w h` / `Ctrl-w l` | Panel to editor / editor to panel |
+| `Esc` (in Claude) | Interrupt Claude |
+| `Shift-Tab` (in Claude) | Cycle permission modes, e.g. plan mode |
+| `/login` (in Copilot CLI) | Sign in the first time |
+
+Files the agents change reload in Vim automatically when you move back to them.
 
 ## Handy commands
 

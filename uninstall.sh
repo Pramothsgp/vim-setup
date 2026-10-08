@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # vim-setup uninstaller: unlinks ~/.vimrc, restores your previous config if
-# there was one, and removes the lines install.sh added to your shell config.
+# there was one, and removes what install.sh added to your shell configs.
 #
 #   ./uninstall.sh            keep downloaded plugins in ~/.vim
 #   ./uninstall.sh --purge    also delete the plugins and the plugin manager
@@ -28,7 +28,7 @@ else
   warn "$VIMRC_DST isn't linked to this repo; left it alone"
 fi
 
-for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.kshrc"; do
   if [ ! -f "$rc" ] || ! grep -qF "$MARK_BEGIN" "$rc"; then continue; fi
   tmp="$(mktemp)"
   awk -v b="$MARK_BEGIN" -v e="$MARK_END" '
@@ -36,6 +36,13 @@ for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
   cat "$tmp" > "$rc" && rm -f "$tmp"
   ok "removed vim-setup lines from $rc"
 done
+if [ -f "$HOME/.config/fish/conf.d/vim-setup.fish" ]; then
+  rm -f "$HOME/.config/fish/conf.d/vim-setup.fish"
+  ok "removed fish settings"
+fi
+
+rm -f "$HOME/.vim-setup.conf" "$HOME/.vim/.tool-paths"
+ok "removed your saved choices"
 
 if [ "$PURGE" -eq 1 ]; then
   rm -rf "$HOME/.vim/plugged" "$HOME/.vim/autoload/plug.vim"

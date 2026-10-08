@@ -1,63 +1,217 @@
 " ============================================================
 "  vim-setup — terminal Vim that works like VS Code (macOS + Linux)
 "  Installed by install.sh, which links this file to ~/.vimrc.
-"  Plugins install automatically the first time you open vim.
+"  The parts you chose during install are listed in ~/.vim-setup.conf;
+"  rerun install.sh to change them.
 "  Open a project like VS Code:   vim ~/projects/my-project
 "  Machine-specific tweaks go in ~/.vimrc.local (loaded last).
 " ============================================================
 
 set nocompatible
 
-" ---------- Auto-install vim-plug ----------
-let data_dir = '~/.vim'
-if empty(glob(data_dir . '/autoload/plug.vim'))
-  silent execute '!curl -fLo ' . data_dir . '/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim'
-  autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
+" ---------- Which parts are switched on ----------
+" Everything is on unless ~/.vim-setup.conf says otherwise.
+let g:vs = {'ui': 1, 'explorer': 1, 'finder': 1, 'editing': 1, 'git': 1,
+      \ 'lsp': 1, 'copilot': 1, 'copilot_chat': 1, 'claude': 1, 'copilot_cli': 1}
+if filereadable(expand('~/.vim-setup.conf'))
+  for s:line in readfile(expand('~/.vim-setup.conf'))
+    let s:m = matchlist(s:line, '^\s*VIM_SETUP_\(\w\+\)\s*=\s*["'']\?\([01]\)')
+    if !empty(s:m) | let g:vs[tolower(s:m[1])] = str2nr(s:m[2]) | endif
+  endfor
+endif
+function! VS(part) abort
+  return get(g:vs, a:part, 0)
+endfunction
+
+" ---------- Finding programs wherever they were installed ----------
+" claude, copilot and node can live in many places: Homebrew, the native
+" installers, npm under nvm/fnm/volta/asdf/mise, pnpm, bun, or only as a
+" shell alias. Order: your override (g:vim_setup_<name>_path in
+" ~/.vimrc.local), PATH, known folders, then ask your login shell.
+let s:tool_cache_file = expand('~/.vim/.tool-paths')
+let s:tool_cache = {}
+if filereadable(s:tool_cache_file)
+  for s:line in readfile(s:tool_cache_file)
+    let s:kv = split(s:line, '=', 1)
+    if len(s:kv) >= 2 | let s:tool_cache[s:kv[0]] = join(s:kv[1:], '=') | endif
+  endfor
 endif
 
-" ---------- Plugins ----------
-let g:plug_timeout = 300            " big plugins (Copilot) on slow networks
-call plug#begin('~/.vim/plugged')
-  " Look
-  Plug 'morhetz/gruvbox'                    " colour scheme
-  Plug 'itchyny/lightline.vim'              " status line
-  Plug 'ap/vim-buftabline'                  " open files as tabs along the top
+function! s:VersionCmp(a, b) abort
+  let a = map(split(matchstr(a:a, '\d\+\(\.\d\+\)*'), '\.'), 'str2nr(v:val)')
+  let b = map(split(matchstr(a:b, '\d\+\(\.\d\+\)*'), '\.'), 'str2nr(v:val)')
+  for i in range(max([len(a), len(b)]))
+    let x = get(a, i, 0) | let y = get(b, i, 0)
+    if x != y | return x > y ? -1 : 1 | endif
+  endfor
+  return 0
+endfunction
 
-  " Sidebar explorer
-  Plug 'preservim/nerdtree'
-  Plug 'Xuyuanp/nerdtree-git-plugin'        " git status markers in the tree
-
-  " Finding things
-  Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
-  Plug 'junegunn/fzf.vim'                   " fuzzy files / grep / buffers
-
-  " Editing
-  Plug 'tpope/vim-commentary'               " gcc / Ctrl-/ = toggle comment
-  Plug 'tpope/vim-surround'                 " cs"' = change surrounding quotes
-  Plug 'tpope/vim-repeat'                   " makes . work with the above
-  Plug 'jiangmiao/auto-pairs'               " auto-close brackets and quotes
-  Plug 'mg979/vim-visual-multi'             " multiple cursors (Ctrl-n = Cmd-D)
-  Plug 'moll/vim-bbye'                      " close a file, keep the layout
-
-  " Git
-  Plug 'tpope/vim-fugitive'                 " :Git status/blame/diff
-  Plug 'airblade/vim-gitgutter'             " +/-/~ markers in the gutter
-
-  " Language support: autocomplete, go-to-definition, errors
-  Plug 'prabirshrestha/vim-lsp'
-  Plug 'mattn/vim-lsp-settings'             " :LspInstallServer per language
-  Plug 'prabirshrestha/asyncomplete.vim'
-  Plug 'prabirshrestha/asyncomplete-lsp.vim'
-
-  " AI: GitHub Copilot inline suggestions (needs Node.js; run :Copilot setup once)
-  if executable('node')
-    Plug 'github/copilot.vim'
+function! s:ToolCandidates(name) abort
+  let h = expand('~')
+  let dirs = [h . '/.local/bin', h . '/bin', '/opt/homebrew/bin', '/usr/local/bin',
+        \ '/home/linuxbrew/.linuxbrew/bin', h . '/.linuxbrew/bin', '/usr/bin', '/snap/bin',
+        \ h . '/.npm-global/bin', h . '/.npm/bin', h . '/.volta/bin', h . '/.bun/bin',
+        \ h . '/.yarn/bin', h . '/.config/yarn/global/node_modules/.bin',
+        \ h . '/Library/pnpm', h . '/.local/share/pnpm', h . '/.asdf/shims',
+        \ h . '/.local/share/mise/shims', h . '/.nodenv/shims', h . '/n/bin']
+  let paths = map(dirs, 'v:val . "/" . a:name')
+  if a:name ==# 'claude'
+    call extend(paths, [h . '/.claude/local/claude', h . '/.claude/local/node_modules/.bin/claude'])
   endif
-call plug#end()
+  " Node version managers keep a bin folder per Node version: newest first
+  for pat in [h . '/.nvm/versions/node/*/bin/',
+        \ h . '/.local/share/fnm/node-versions/*/installation/bin/',
+        \ h . '/Library/Application Support/fnm/node-versions/*/installation/bin/',
+        \ h . '/.fnm/node-versions/*/installation/bin/',
+        \ h . '/.asdf/installs/nodejs/*/bin/', h . '/.local/share/mise/installs/node/*/bin/',
+        \ h . '/.volta/tools/image/node/*/bin/']
+    call extend(paths, sort(glob(pat . a:name, 1, 1), function('s:VersionCmp')))
+  endfor
+  return paths
+endfunction
 
-" Install any plugin added to the list above that isn't downloaded yet
-autocmd VimEnter * if len(filter(values(g:plugs), '!isdirectory(v:val.dir)'))
-      \ | PlugInstall --sync | close | source $MYVIMRC | endif
+" Ask the user's own shell (zsh, bash, fish, nu, ...) where the command is.
+" Catches aliases and PATH changes made in .zshrc/.bashrc/config.fish.
+function! s:AskShell(name) abort
+  let sh = empty($SHELL) ? '/bin/sh' : $SHELL
+  let shname = fnamemodify(sh, ':t')
+  if shname =~# '^fish'
+    let cmd = [sh, '-l', '-i', '-c', 'command -v ' . a:name . '; or functions ' . a:name]
+  elseif shname =~# '^nu'
+    let cmd = [sh, '-l', '-c', 'which ' . a:name . ' | to text']
+  elseif shname ==# 'bash'
+    " login bash skips ~/.bashrc, where aliases usually live
+    let cmd = [sh, '-l', '-i', '-c', '[ -f ~/.bashrc ] && . ~/.bashrc >/dev/null 2>&1; alias ' . a:name . ' 2>/dev/null; command -v ' . a:name]
+  elseif shname =~# '\v^(zsh|ksh|mksh|yash)$'
+    let cmd = [sh, '-l', '-i', '-c', 'alias ' . a:name . ' 2>/dev/null; command -v ' . a:name]
+  else
+    let cmd = [sh, '-l', '-c', 'command -v ' . a:name]
+  endif
+  let out = tempname()
+  try
+    let job = job_start(cmd, {'in_io': 'null', 'err_io': 'null', 'out_io': 'file',
+          \ 'out_name': out, 'env': {'TERM': 'dumb', 'POWERLEVEL9K_INSTANT_PROMPT': 'off'}})
+  catch
+    return ''
+  endtry
+  let waited = 0
+  while job_status(job) ==# 'run' && waited < 5000
+    sleep 50m
+    let waited += 50
+  endwhile
+  if job_status(job) ==# 'run' | call job_stop(job, 'kill') | endif
+  let text = filereadable(out) ? join(readfile(out), "\n") : ''
+  call delete(out)
+  " Any path ending in /<name> (from `command -v`, an alias, or a fish function)
+  let text = substitute(text, '\e\[[0-9;?]*[A-Za-z]', '', 'g')
+  for tok in split(text, '[[:space:]''"=;]\+')
+    let p = expand(tok)
+    if p =~# '/' . a:name . '$' && executable(p) | return p | endif
+  endfor
+  return ''
+endfunction
+
+" FindTool(name)         full search, may ask the shell (used when you press a key)
+" FindTool(name, 1)      quick search only (used at startup)
+function! FindTool(name, ...) abort
+  let quick = a:0 && a:1
+  let override = expand(get(g:, 'vim_setup_' . a:name . '_path', ''))
+  if !empty(override) && executable(override) | return override | endif
+  let p = exepath(a:name)
+  if !empty(p) | return p | endif
+  if has_key(s:tool_cache, a:name) && executable(s:tool_cache[a:name])
+    return s:tool_cache[a:name]
+  endif
+  for p in s:ToolCandidates(a:name)
+    if executable(p) | return s:RememberTool(a:name, p) | endif
+  endfor
+  if !quick
+    let p = s:AskShell(a:name)
+    if !empty(p) | return s:RememberTool(a:name, p) | endif
+  endif
+  return ''
+endfunction
+
+function! s:RememberTool(name, path) abort
+  let s:tool_cache[a:name] = a:path
+  silent! call mkdir(fnamemodify(s:tool_cache_file, ':h'), 'p')
+  silent! call writefile(map(items(s:tool_cache), 'v:val[0] . "=" . v:val[1]'), s:tool_cache_file)
+  return a:path
+endfunction
+
+" Copilot needs Node.js, which may only be on PATH inside your shell (nvm etc.)
+let s:node = (VS('copilot') || VS('lsp')) ? FindTool('node', 1) : ''
+if !empty(s:node) && empty(exepath('node'))
+  let g:copilot_node_command = s:node
+  let $PATH = fnamemodify(s:node, ':h') . ':' . $PATH   " for language servers too
+endif
+
+" ---------- Plugins (only the parts you chose) ----------
+let s:want_plugins = VS('ui') || VS('explorer') || VS('finder') || VS('editing')
+      \ || VS('git') || VS('lsp') || VS('copilot') || VS('copilot_chat')
+let s:have_plug = filereadable(expand('~/.vim/autoload/plug.vim'))
+if s:want_plugins && !s:have_plug && executable('curl')
+  silent execute '!curl -fsSLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim'
+  let s:have_plug = filereadable(expand('~/.vim/autoload/plug.vim'))
+endif
+
+if s:want_plugins && s:have_plug
+  let g:plug_timeout = 300            " big plugins (Copilot) on slow networks
+  call plug#begin('~/.vim/plugged')
+  if VS('ui')
+    Plug 'morhetz/gruvbox'                    " colour scheme
+    Plug 'itchyny/lightline.vim'              " status line
+    Plug 'ap/vim-buftabline'                  " open files as tabs along the top
+  endif
+  if VS('explorer')
+    Plug 'preservim/nerdtree'                 " sidebar explorer
+    if VS('git')
+      Plug 'Xuyuanp/nerdtree-git-plugin'
+    endif
+  endif
+  if VS('finder')
+    Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
+    Plug 'junegunn/fzf.vim'                   " fuzzy files / grep / buffers
+  endif
+  if VS('editing')
+    Plug 'tpope/vim-commentary'               " gcc / Ctrl-/ = toggle comment
+    Plug 'tpope/vim-surround'                 " cs"' = change surrounding quotes
+    Plug 'tpope/vim-repeat'                   " makes . work with the above
+    Plug 'jiangmiao/auto-pairs'               " auto-close brackets and quotes
+    Plug 'mg979/vim-visual-multi'             " multiple cursors (Ctrl-n = Cmd-D)
+    Plug 'moll/vim-bbye'                      " close a file, keep the layout
+  endif
+  if VS('git')
+    Plug 'tpope/vim-fugitive'                 " :Git status/blame/diff
+    Plug 'airblade/vim-gitgutter'             " +/-/~ markers in the gutter
+  endif
+  if VS('lsp')
+    Plug 'prabirshrestha/vim-lsp'
+    Plug 'mattn/vim-lsp-settings'             " :LspInstallServer per language
+    Plug 'prabirshrestha/asyncomplete.vim'
+    Plug 'prabirshrestha/asyncomplete-lsp.vim'
+  endif
+  if VS('copilot') && !empty(s:node)
+    Plug 'github/copilot.vim'                 " grey suggestions; :Copilot setup once
+  endif
+  if VS('copilot_chat') && v:version >= 900
+    " Copilot Chat window. Loaded on first use, so it only asks you to sign
+    " in when you open the chat, not every time Vim starts.
+    Plug 'DanBradbury/copilot-chat.vim', { 'on': ['CopilotChatOpen', 'CopilotChat',
+          \ 'CopilotChatFocus', 'CopilotChatToggle', 'CopilotChatModels', 'CopilotChatReset',
+          \ 'CopilotChatSave', 'CopilotChatLoad', 'CopilotChatList', 'CopilotChatUsage',
+          \ '<Plug>CopilotChatAddSelection'] }
+  endif
+  call plug#end()
+
+  " Install any plugin that isn't downloaded yet
+  autocmd VimEnter * if len(filter(values(g:plugs), '!isdirectory(v:val.dir)'))
+        \ | PlugInstall --sync | close | source $MYVIMRC | endif
+endif
+function! s:Has(plugin) abort
+  return exists('g:plugs') && has_key(g:plugs, a:plugin) && isdirectory(g:plugs[a:plugin].dir)
+endfunction
 
 syntax on
 filetype plugin indent on
@@ -66,26 +220,39 @@ filetype plugin indent on
 set number relativenumber
 set cursorline
 set showcmd
-set noshowmode              " lightline already shows the mode
 set laststatus=2
-set showtabline=2           " always show the file tabs
 set scrolloff=8
 set signcolumn=yes
 set updatetime=300          " faster git markers and diagnostics
+set timeoutlen=500 ttimeoutlen=10
 
-if $COLORTERM ==# 'truecolor' || $COLORTERM ==# '24bit'
+" True colour in terminals that support it (iTerm2, Ghostty, WezTerm, kitty,
+" Alacritty, VS Code, tmux). Plain macOS Terminal.app stays on 256 colours.
+if $COLORTERM =~# '\v^(truecolor|24bit)$'
+      \ || $TERM_PROGRAM =~# '\v^(iTerm\.app|WezTerm|ghostty|vscode|Hyper|Tabby)$'
+      \ || $TERM =~# '\v(kitty|alacritty|ghostty|wezterm|foot)'
+  if &term =~# '^\(tmux\|screen\)'
+    let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
+    let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
+  endif
   set termguicolors
 endif
 set background=dark
-try
+if s:Has('gruvbox')
   colorscheme gruvbox
-catch
-  colorscheme habamax       " fallback before plugins are installed
-endtry
-let g:lightline = { 'colorscheme': 'gruvbox',
-      \ 'enable': { 'statusline': 1, 'tabline': 0 } }   " tabs come from buftabline
-let g:buftabline_numbers = 2      " tab numbers for Space 1..9
-let g:buftabline_indicators = 1   " mark unsaved files
+else
+  silent! colorscheme habamax
+endif
+if s:Has('lightline.vim')
+  set noshowmode
+  let g:lightline = { 'colorscheme': s:Has('gruvbox') ? 'gruvbox' : 'default',
+        \ 'enable': { 'statusline': 1, 'tabline': 0 } }   " tabs come from buftabline
+endif
+if s:Has('vim-buftabline')
+  set showtabline=2
+  let g:buftabline_numbers = 2      " tab numbers for Space 1..9
+  let g:buftabline_indicators = 1   " mark unsaved files
+endif
 
 " Thin cursor in insert mode, block in normal mode
 let &t_SI = "\e[6 q"
@@ -111,7 +278,7 @@ let g:AutoPairsMultilineClose = 0
 autocmd FileType javascript,typescript,typescriptreact,javascriptreact,json,yaml,html,css setlocal ts=2 sw=2 sts=2
 " Commit messages: spellcheck and wrap at 72
 autocmd FileType gitcommit setlocal spell textwidth=72
-" (also picks up edits Claude makes to open files)
+" Reload files changed on disk (also picks up edits made by Claude or Copilot)
 autocmd FocusGained,BufEnter,CursorHold * silent! checktime
 
 " ---------- Search ----------
@@ -119,27 +286,34 @@ set incsearch hlsearch
 set ignorecase smartcase
 set wildmenu
 set wildmode=longest:full,full
+set path=.,**               " :find searches the whole project
+set wildignore+=*/node_modules/*,*/.git/*,*/dist/*,*/build/*,*/__pycache__/*
+if executable('rg')
+  set grepprg=rg\ --vimgrep\ --smart-case grepformat=%f:%l:%c:%m
+  let $FZF_DEFAULT_COMMAND = 'rg --files'   " ripgrep reads .ignore by itself
+endif
 
-" ---------- Sidebar explorer (NERDTree) ----------
+" ---------- Explorer ----------
 let g:NERDTreeHijackNetrw = 0
 let g:NERDTreeMinimalUI = 1
 let g:NERDTreeWinSize = 32
 let g:NERDTreeMouseMode = 3        " single click opens files and folders
 let g:NERDTreeShowHidden = 0       " dotfiles hidden; I toggles
-let g:NERDTreeQuitOnOpen = 0
+let g:netrw_banner = 0             " built-in explorer, used when NERDTree is off
+let g:netrw_liststyle = 3
+let g:netrw_winsize = 25
 
 " `vim some/folder` opens it like VS Code: folder becomes the project,
 " explorer on the left, empty editor on the right
 function! s:OpenProject() abort
   if argc() != 1 || !isdirectory(argv(0)) | return | endif
-  let dirbuf = bufnr('%')
   execute 'cd' fnameescape(argv(0))
+  if exists(':NERDTree') != 2 | return | endif    " built-in explorer shows the folder
+  let dirbuf = bufnr('%')
   enew
   silent! execute 'bwipeout' dirbuf
-  if exists(':NERDTree') == 2
-    NERDTree
-    wincmd p
-  endif
+  NERDTree
+  wincmd p
 endfunction
 autocmd VimEnter * nested call s:OpenProject()
 
@@ -149,14 +323,7 @@ autocmd BufEnter * if tabpagenr('$') == 1 && winnr('$') == 1 && exists('b:NERDTr
 " ---------- Per-project hidden files ----------
 " Each project keeps its own list in <project>/.ignore (one name or glob per
 " line, e.g.  node_modules  or  *.log). Listed items disappear from the
-" explorer, Ctrl-p / Space f and Space g.
-"   Space x        hide the file/folder under the cursor (or the current file)
-"   Space X        edit this project's list (saving it applies the change)
-"   :Hide name     hide by name or glob      :Unhide name   show it again
-if executable('rg')
-  let $FZF_DEFAULT_COMMAND = 'rg --files'   " ripgrep reads .ignore by itself
-endif
-
+" explorer, the file finder and project search.
 function! s:IgnoreFile() abort
   return getcwd() . '/.ignore'
 endfunction
@@ -175,7 +342,7 @@ function! s:LoadHidden() abort
     call add(pats, glob2regpat(name))
   endfor
   let g:NERDTreeIgnore = pats
-  " redraw an open explorer so the change shows straight away
+  let g:netrw_list_hide = join(map(copy(pats), 'substitute(v:val, ''\$$'', '''', '''') . ''[/*@]\=$'''), ',')
   for win in getwininfo()
     if getbufvar(win.bufnr, '&filetype') ==# 'nerdtree'
       call win_execute(win.winid, 'silent! NERDTreeRefreshRoot')
@@ -183,15 +350,12 @@ function! s:LoadHidden() abort
   endfor
 endfunction
 
-function! s:SelectedNode() abort
-  if &filetype !=# 'nerdtree' | return {} | endif
-  return g:NERDTreeFileNode.GetSelected()
-endfunction
-
 function! s:NameUnderCursor() abort
-  let node = s:SelectedNode()
   if &filetype ==# 'nerdtree'
+    let node = g:NERDTreeFileNode.GetSelected()
     return empty(node) ? '' : node.path.getLastPathComponent(0)
+  elseif &filetype ==# 'netrw'
+    return fnamemodify(substitute(netrw#Call('NetrwGetWord'), '[/*@]$', '', ''), ':t')
   endif
   return expand('%:t')
 endfunction
@@ -234,9 +398,11 @@ call s:LoadHidden()
 " current file's folder, else the project
 function! s:HereDir() abort
   if &filetype ==# 'nerdtree'
-    let node = s:SelectedNode()
+    let node = g:NERDTreeFileNode.GetSelected()
     if empty(node) | return b:NERDTree.root.path.str() | endif
     return node.path.isDirectory ? node.path.str() : fnamemodify(node.path.str(), ':h')
+  elseif &filetype ==# 'netrw' && exists('b:netrw_curdir')
+    return b:netrw_curdir
   endif
   return empty(expand('%')) ? getcwd() : expand('%:p:h')
 endfunction
@@ -255,58 +421,82 @@ function! s:ToggleTerminal() abort
     botright terminal ++rows=12 ++kill=term
     let g:panel_term = bufnr('%')
     setlocal nobuflisted
-    " Esc Esc leaves typing mode here only (Claude's panel needs its own Esc)
+    " Esc Esc leaves typing mode here only (the AI panels need their own Esc)
     tnoremap <buffer> <Esc><Esc> <C-\><C-n>
   endif
 endfunction
 
-" ---------- Claude Code panel (like the Claude sidebar in VS Code) ----------
-function! s:ClaudeWidth() abort
+" ---------- AI agent panels: Claude Code and GitHub Copilot CLI ----------
+let s:agents = {
+      \ 'claude':  {'title': 'Claude Code', 'part': 'claude',
+      \             'install': 'curl -fsSL https://claude.ai/install.sh | bash'},
+      \ 'copilot': {'title': 'GitHub Copilot CLI', 'part': 'copilot_cli',
+      \             'install': 'brew install --cask copilot-cli   (or: npm install -g @github/copilot)'},
+      \ }
+let s:panel_buf = {}
+let s:last_agent = VS('claude') ? 'claude' : 'copilot'
+
+function! s:PanelWidth() abort
   return max([60, &columns * 2 / 5])
 endfunction
 
-function! s:ClaudeBuf() abort
-  let buf = get(g:, 'claude_term', -1)
+function! s:AgentBuf(name) abort
+  let buf = get(s:panel_buf, a:name, -1)
   return bufexists(buf) && term_getstatus(buf) =~# 'running' ? buf : -1
 endfunction
 
-function! s:OpenClaude() abort
-  if !executable('claude')
+function! s:OpenAgent(name) abort
+  let exe = FindTool(a:name)
+  if empty(exe)
     echohl WarningMsg
-    echo 'Claude Code is not installed. In a terminal: curl -fsSL https://claude.ai/install.sh | bash'
+    echo s:agents[a:name].title . ' was not found. Install it with:  ' . s:agents[a:name].install
+          \ . '   (or set g:vim_setup_' . a:name . '_path in ~/.vimrc.local)'
     echohl None
     return 0
   endif
-  execute 'vertical botright terminal ++close ++kill=term ++cols=' . s:ClaudeWidth() . ' claude'
-  let g:claude_term = bufnr('%')
+  " Run it with its own folder (and Node's) on PATH, so npm-installed
+  " versions work even when Vim was started without your shell's PATH
+  let path = fnamemodify(exe, ':h')
+  let node = FindTool('node', 1)
+  if !empty(node) | let path .= ':' . fnamemodify(node, ':h') | endif
+  botright vertical new
+  setlocal bufhidden=wipe
+  let buf = term_start([exe], {'curwin': 1, 'term_finish': 'close', 'term_kill': 'term',
+        \ 'term_name': s:agents[a:name].title, 'norestore': 1,
+        \ 'env': {'PATH': path . ':' . $PATH}})
+  execute 'vertical resize' s:PanelWidth()
   setlocal nobuflisted
+  let s:panel_buf[a:name] = buf
+  let s:last_agent = a:name
   return 1
 endfunction
 
-function! s:ShowClaude(buf) abort
-  let win = bufwinid(a:buf)
+function! s:ShowAgent(name) abort
+  let buf = s:AgentBuf(a:name)
+  let win = bufwinid(buf)
   if win != -1
     call win_gotoid(win)
   else
-    execute 'vertical botright sbuffer' a:buf
-    execute 'vertical resize' s:ClaudeWidth()
+    execute 'botright vertical sbuffer' buf
+    execute 'vertical resize' s:PanelWidth()
   endif
+  let s:last_agent = a:name
 endfunction
 
-function! s:ToggleClaude() abort
-  let buf = s:ClaudeBuf()
+function! s:ToggleAgent(name) abort
+  let buf = s:AgentBuf(a:name)
   if buf == -1
-    call s:OpenClaude()
+    call s:OpenAgent(a:name)
   elseif bufwinid(buf) != -1
     execute win_id2win(bufwinid(buf)) . 'hide'
   else
-    call s:ShowClaude(buf)
+    call s:ShowAgent(a:name)
   endif
 endfunction
 
-" Type a reference to this file (and the selected lines) into Claude's
-" prompt, so you only have to add the question
-function! s:SendToClaude(line1, line2) abort
+" Type a reference to this file (and the selected lines) into the prompt of
+" the AI panel you used last, so you only have to add the question
+function! s:SendToAgent(line1, line2) abort
   if &buftype !=# '' || empty(expand('%'))
     echo 'Open a file first' | return
   endif
@@ -314,22 +504,23 @@ function! s:SendToClaude(line1, line2) abort
   if a:line1 > 0
     let ref .= (a:line1 == a:line2 ? 'line ' . a:line1 : 'lines ' . a:line1 . '-' . a:line2) . ' '
   endif
-  let buf = s:ClaudeBuf()
+  let name = s:last_agent
+  let buf = s:AgentBuf(name)
   if buf == -1
-    if !s:OpenClaude() | return | endif
-    let buf = g:claude_term
-    call timer_start(2000, {-> term_sendkeys(buf, ref)})   " let Claude start first
+    if !s:OpenAgent(name) | return | endif
+    let buf = s:panel_buf[name]
+    call timer_start(2000, {-> term_sendkeys(buf, ref)})   " let it start first
   else
-    call s:ShowClaude(buf)
+    call s:ShowAgent(name)
     call term_sendkeys(buf, ref)
   endif
 endfunction
 
-" ---------- GitHub Copilot ----------
+" ---------- GitHub Copilot (inline suggestions) ----------
 let g:copilot_no_tab_map = v:true     " Tab is shared with autocomplete below
 function! s:ToggleCopilot() abort
   if !exists('g:loaded_copilot')
-    echo 'Copilot is not installed (it needs Node.js)' | return
+    echo 'Copilot suggestions are not installed (they need Node.js)' | return
   endif
   if copilot#Enabled()
     Copilot disable
@@ -344,76 +535,114 @@ endfunction
 let mapleader = " "
 inoremap jk <Esc>
 
+" Run a command in the editor window, never inside the explorer sidebar,
+" so files always open on the right like VS Code
+function! s:InEditor(cmd) abort
+  if &filetype =~# '^\(nerdtree\|netrw\)$' && winnr('$') > 1 | wincmd p | endif
+  if &filetype ==# 'nerdtree' | botright vnew | endif
+  execute a:cmd
+endfunction
+
 " Save / close
 nnoremap <C-s> :w<CR>
 inoremap <C-s> <Esc>:w<CR>
 nnoremap <leader>w :w<CR>
-nnoremap <leader>c :Bdelete<CR>
 nnoremap <leader>q :q<CR>
 nnoremap <leader>h :nohlsearch<CR>
+if s:Has('vim-bbye')
+  nnoremap <leader>c :Bdelete<CR>
+else
+  nnoremap <leader>c :bprevious <Bar> bdelete #<CR>
+endif
 
 " Explorer
-nnoremap <leader>e :NERDTreeToggle<CR>
-nnoremap <leader>E :NERDTreeFind<CR>
+if s:Has('nerdtree')
+  nnoremap <leader>e :NERDTreeToggle<CR>
+  nnoremap <leader>E :NERDTreeFind<CR>
+else
+  nnoremap <leader>e :Lexplore<CR>
+  nnoremap <leader>E :Lexplore %:p:h<CR>
+endif
 nnoremap <leader>x :Hide<CR>
 nnoremap <leader>X :execute 'split' fnameescape(<SID>IgnoreFile())<CR>
 
-" Run a command in the editor window, never inside the explorer sidebar,
-" so files always open on the right like VS Code
-function! s:InEditor(cmd) abort
-  if &filetype ==# 'nerdtree' | wincmd p | endif
-  if &filetype ==# 'nerdtree' | botright vnew | endif
-  execute a:cmd
-endfunction
-function! s:GoToTab(n) abort
-  let bufs = buftabline#user_buffers()
-  if a:n <= len(bufs) | call s:InEditor('buffer ' . bufs[a:n - 1]) | endif
-endfunction
-
 " Open files (Cmd-P, Cmd-Shift-F)
-nnoremap <C-p> :call <SID>InEditor('Files')<CR>
-nnoremap <leader>p :call <SID>InEditor('Files')<CR>
-nnoremap <leader>f :call <SID>InEditor('Files ' . fnameescape(<SID>HereDir()))<CR>
-nnoremap <leader>g :call <SID>InEditor('Rg')<CR>
-nnoremap <leader>b :call <SID>InEditor('Buffers')<CR>
-nnoremap <leader>/ :BLines<CR>
-nnoremap <leader>r :call <SID>InEditor('History')<CR>
+if s:Has('fzf.vim')
+  nnoremap <C-p> :call <SID>InEditor('Files')<CR>
+  nnoremap <leader>p :call <SID>InEditor('Files')<CR>
+  nnoremap <leader>f :call <SID>InEditor('Files ' . fnameescape(<SID>HereDir()))<CR>
+  nnoremap <leader>g :call <SID>InEditor('Rg')<CR>
+  nnoremap <leader>b :call <SID>InEditor('Buffers')<CR>
+  nnoremap <leader>/ :BLines<CR>
+  nnoremap <leader>r :call <SID>InEditor('History')<CR>
+else
+  " Built-in fallbacks: :find with Tab completion, :grep, :ls
+  nnoremap <C-p> :find<Space>
+  nnoremap <leader>p :find<Space>
+  nnoremap <leader>f :find <C-r>=fnameescape(fnamemodify(<SID>HereDir(), ':.'))<CR>/
+  nnoremap <leader>g :grep!<Space>
+  nnoremap <leader>b :ls<CR>:buffer<Space>
+  nnoremap <leader>/ /
+  nnoremap <leader>r :browse oldfiles<CR>
+  autocmd QuickFixCmdPost grep cwindow
+endif
 
-" Switch between open files (tabs along the top)
+" Switch between open files
 nnoremap <S-l> :call <SID>InEditor('bnext')<CR>
 nnoremap <S-h> :call <SID>InEditor('bprevious')<CR>
 nnoremap <leader><Tab> :call <SID>InEditor('buffer #')<CR>
+function! s:GoToTab(n) abort
+  let bufs = s:Has('vim-buftabline') ? buftabline#user_buffers()
+        \ : map(filter(getbufinfo({'buflisted': 1}), 'v:val.name !=# ""'), 'v:val.bufnr')
+  if a:n <= len(bufs) | call s:InEditor('buffer ' . bufs[a:n - 1]) | endif
+endfunction
 for s:i in range(1, 9)
   execute 'nnoremap <leader>' . s:i . ' :call <SID>GoToTab(' . s:i . ')<CR>'
 endfor
 
 " Comment toggle with Ctrl-/ (terminals send it as Ctrl-_)
-nmap <C-_> gcc
-xmap <C-_> gc
-imap <C-_> <Esc>gcca
+if s:Has('vim-commentary')
+  nmap <C-_> gcc
+  xmap <C-_> gc
+  imap <C-_> <Esc>gcca
+endif
 
 " Terminal panel
 nnoremap <C-t> :call <SID>ToggleTerminal()<CR>
 nnoremap <leader>t :call <SID>ToggleTerminal()<CR>
 tnoremap <C-t> <C-\><C-n>:call <SID>ToggleTerminal()<CR>
 
-" AI: Claude panel and Copilot
-nnoremap <leader>aa :call <SID>ToggleClaude()<CR>
-nnoremap <leader>af :call <SID>SendToClaude(0, 0)<CR>
-xnoremap <leader>af :<C-u>call <SID>SendToClaude(line("'<"), line("'>"))<CR>
-nnoremap <leader>ac :call <SID>ToggleCopilot()<CR>
-nnoremap <leader>ap :Copilot panel<CR>
-if executable('node')
+" AI
+if VS('claude')
+  nnoremap <leader>aa :call <SID>ToggleAgent('claude')<CR>
+endif
+if VS('copilot_cli')
+  nnoremap <leader>ag :call <SID>ToggleAgent('copilot')<CR>
+endif
+if VS('claude') || VS('copilot_cli')
+  nnoremap <leader>af :call <SID>SendToAgent(0, 0)<CR>
+  xnoremap <leader>af :<C-u>call <SID>SendToAgent(line("'<"), line("'>"))<CR>
+endif
+if s:Has('copilot.vim')
+  nnoremap <leader>ac :call <SID>ToggleCopilot()<CR>
+  nnoremap <leader>ap :Copilot panel<CR>
   " Alternatives to Copilot's Alt keys, which macOS terminals don't send by default
   imap <C-j> <Plug>(copilot-next)
   imap <C-k> <Plug>(copilot-previous)
   imap <C-l> <Plug>(copilot-accept-word)
 endif
+if s:Has('copilot-chat.vim')
+  nnoremap <leader>ai :CopilotChatOpen<CR>
+  vmap <leader>ai <Plug>CopilotChatAddSelection
+  nnoremap <leader>am :CopilotChatModels<CR>
+endif
 
 " Git
-nnoremap <leader>gs :Git<CR>
-nnoremap <leader>gb :Git blame<CR>
-nnoremap <leader>gd :Gdiffsplit<CR>
+if s:Has('vim-fugitive')
+  nnoremap <leader>gs :Git<CR>
+  nnoremap <leader>gb :Git blame<CR>
+  nnoremap <leader>gd :Gdiffsplit<CR>
+endif
 
 " Splits
 nnoremap <leader>\ :vsplit<CR>
@@ -457,12 +686,12 @@ augroup END
 let g:lsp_diagnostics_virtual_text_enabled = 1
 
 " Tab: move through the autocomplete menu when it's open, otherwise accept
-" Copilot's grey suggestion, otherwise insert a normal Tab
-" Shift-Tab moves back through the menu, Enter accepts from the menu
+" Copilot's grey suggestion, otherwise insert a normal Tab.
+" Shift-Tab moves back through the menu, Enter accepts from the menu.
 imap <silent><script><expr> <Tab> pumvisible() ? "\<C-n>"
       \ : exists('g:loaded_copilot') ? copilot#Accept("\<Tab>") : "\<Tab>"
 inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<S-Tab>"
-inoremap <expr> <CR>    pumvisible() ? asyncomplete#close_popup() : "\<CR>"
+inoremap <expr> <CR>    pumvisible() ? "\<C-y>" : "\<CR>"
 
 " ---------- Machine-specific overrides ----------
 if filereadable(expand('~/.vimrc.local'))
