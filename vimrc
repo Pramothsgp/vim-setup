@@ -8,6 +8,13 @@
 " ============================================================
 
 set nocompatible
+set encoding=utf-8           " even on servers without a UTF-8 locale
+
+" All autocommands live in this group; clearing it first makes it safe to
+" reload the config with :source ~/.vimrc
+augroup vimsetup
+  autocmd!
+augroup END
 
 " ---------- Which parts are switched on ----------
 " Everything is on unless ~/.vim-setup.conf says otherwise.
@@ -206,7 +213,7 @@ if s:want_plugins && s:have_plug
   call plug#end()
 
   " Install any plugin that isn't downloaded yet
-  autocmd VimEnter * if len(filter(values(g:plugs), '!isdirectory(v:val.dir)'))
+  autocmd vimsetup VimEnter * if len(filter(values(g:plugs), '!isdirectory(v:val.dir)'))
         \ | PlugInstall --sync | close | source $MYVIMRC | endif
 endif
 function! s:Has(plugin) abort
@@ -271,15 +278,26 @@ set undodir=~/.vim/undo//
 silent! call mkdir(expand('~/.vim/undo'), 'p')
 set noswapfile
 set splitright splitbelow   " new splits open right / below
+set diffopt+=vertical,algorithm:histogram,indent-heuristic   " diffs side by side, VS Code style
 let g:AutoPairsMapCR = 0              " keep Enter for autocomplete
 let g:AutoPairsMultilineClose = 0
 
 " 2-space indent for web files
-autocmd FileType javascript,typescript,typescriptreact,javascriptreact,json,yaml,html,css setlocal ts=2 sw=2 sts=2
+autocmd vimsetup FileType javascript,typescript,typescriptreact,javascriptreact,json,yaml,html,css setlocal ts=2 sw=2 sts=2
 " Commit messages: spellcheck and wrap at 72
-autocmd FileType gitcommit setlocal spell textwidth=72
+autocmd vimsetup FileType gitcommit setlocal spell textwidth=72
 " Reload files changed on disk (also picks up edits made by Claude or Copilot)
-autocmd FocusGained,BufEnter,CursorHold * silent! checktime
+autocmd vimsetup FocusGained,BufEnter,CursorHold * silent! checktime
+" While a terminal or AI panel is open, look for changed files every second,
+" so edits made by Claude, Copilot or a shell command show up straight away
+function! s:CheckForOutsideEdits(timer) abort
+  if !empty(term_list()) && mode() =~# '^[nt]' && getcmdwintype() ==# ''
+    silent! checktime
+  endif
+endfunction
+if has('terminal') && !exists('s:outside_edits_timer')
+  let s:outside_edits_timer = timer_start(1000, function('s:CheckForOutsideEdits'), {'repeat': -1})
+endif
 
 " ---------- Search ----------
 set incsearch hlsearch
@@ -299,6 +317,7 @@ let g:NERDTreeMinimalUI = 1
 let g:NERDTreeWinSize = 32
 let g:NERDTreeMouseMode = 3        " single click opens files and folders
 let g:NERDTreeShowHidden = 0       " dotfiles hidden; I toggles
+let g:gitgutter_map_keys = 0       " set up below without overlapping keys
 let g:netrw_banner = 0             " built-in explorer, used when NERDTree is off
 let g:netrw_liststyle = 3
 let g:netrw_winsize = 25
@@ -315,10 +334,10 @@ function! s:OpenProject() abort
   NERDTree
   wincmd p
 endfunction
-autocmd VimEnter * nested call s:OpenProject()
+autocmd vimsetup VimEnter * nested call s:OpenProject()
 
 " Quit Vim when the explorer is the only window left
-autocmd BufEnter * if tabpagenr('$') == 1 && winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | call feedkeys(":quit\<CR>:\<BS>") | endif
+autocmd vimsetup BufEnter * if tabpagenr('$') == 1 && winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | call feedkeys(":quit\<CR>:\<BS>") | endif
 
 " ---------- Per-project hidden files ----------
 " Each project keeps its own list in <project>/.ignore (one name or glob per
@@ -421,8 +440,10 @@ function! s:ToggleTerminal() abort
     botright terminal ++rows=12 ++kill=term
     let g:panel_term = bufnr('%')
     setlocal nobuflisted
-    " Esc Esc leaves typing mode here only (the AI panels need their own Esc)
+    " Only in this panel: Esc Esc to scroll/copy, Ctrl-t to hide it
+    " (the AI panels keep their own Esc and Ctrl-t)
     tnoremap <buffer> <Esc><Esc> <C-\><C-n>
+    tnoremap <buffer> <C-t> <C-\><C-n>:call <SID>ToggleTerminal()<CR>
   endif
 endfunction
 
@@ -543,6 +564,13 @@ function! s:InEditor(cmd) abort
   execute a:cmd
 endfunction
 
+" Leader key layout (Space). No key here is the start of a longer one, so
+" every shortcut fires at once instead of making Vim wait:
+"   single keys   w q c h e E x X p f s b / r t 1-9 Tab \
+"   ]b / [b       next / previous file tab
+"   Space g...    Git           Space l...    language / code
+"   Space a...    AI
+
 " Save / close
 nnoremap <C-s> :w<CR>
 inoremap <C-s> <Esc>:w<CR>
@@ -566,12 +594,12 @@ endif
 nnoremap <leader>x :Hide<CR>
 nnoremap <leader>X :execute 'split' fnameescape(<SID>IgnoreFile())<CR>
 
-" Open files (Cmd-P, Cmd-Shift-F)
+" Find files and text (Cmd-P, Cmd-Shift-F)
 if s:Has('fzf.vim')
   nnoremap <C-p> :call <SID>InEditor('Files')<CR>
   nnoremap <leader>p :call <SID>InEditor('Files')<CR>
   nnoremap <leader>f :call <SID>InEditor('Files ' . fnameescape(<SID>HereDir()))<CR>
-  nnoremap <leader>g :call <SID>InEditor('Rg')<CR>
+  nnoremap <leader>s :call <SID>InEditor('Rg')<CR>
   nnoremap <leader>b :call <SID>InEditor('Buffers')<CR>
   nnoremap <leader>/ :BLines<CR>
   nnoremap <leader>r :call <SID>InEditor('History')<CR>
@@ -580,16 +608,17 @@ else
   nnoremap <C-p> :find<Space>
   nnoremap <leader>p :find<Space>
   nnoremap <leader>f :find <C-r>=fnameescape(fnamemodify(<SID>HereDir(), ':.'))<CR>/
-  nnoremap <leader>g :grep!<Space>
+  nnoremap <leader>s :grep!<Space>
   nnoremap <leader>b :ls<CR>:buffer<Space>
   nnoremap <leader>/ /
   nnoremap <leader>r :browse oldfiles<CR>
-  autocmd QuickFixCmdPost grep cwindow
+  autocmd vimsetup QuickFixCmdPost grep cwindow
 endif
 
-" Switch between open files
-nnoremap <S-l> :call <SID>InEditor('bnext')<CR>
-nnoremap <S-h> :call <SID>InEditor('bprevious')<CR>
+" Switch between open files: ]b / [b (Shift-h / Shift-l are left alone:
+" they're Vim's H and L, jump to the top / bottom of the screen)
+nnoremap ]b :call <SID>InEditor('bnext')<CR>
+nnoremap [b :call <SID>InEditor('bprevious')<CR>
 nnoremap <leader><Tab> :call <SID>InEditor('buffer #')<CR>
 function! s:GoToTab(n) abort
   let bufs = s:Has('vim-buftabline') ? buftabline#user_buffers()
@@ -600,19 +629,27 @@ for s:i in range(1, 9)
   execute 'nnoremap <leader>' . s:i . ' :call <SID>GoToTab(' . s:i . ')<CR>'
 endfor
 
-" Comment toggle with Ctrl-/ (terminals send it as Ctrl-_)
+" Comment toggle with Ctrl-/ (most terminals send it as Ctrl-_, some as Ctrl-/)
+" (in Insert mode the cursor stays where you were typing)
+function! s:CommentWhileTyping() abort
+  let [len0, col0] = [strlen(getline('.')), col('.')]
+  execute "normal \<Plug>CommentaryLine"
+  call cursor(line('.'), max([1, col0 + strlen(getline('.')) - len0]))
+endfunction
 if s:Has('vim-commentary')
-  nmap <C-_> gcc
-  xmap <C-_> gc
-  imap <C-_> <Esc>gcca
+  for s:k in ['<C-_>', '<C-/>']
+    execute 'nmap' s:k 'gcc'
+    execute 'xmap' s:k 'gc'
+    execute 'inoremap <silent>' s:k '<Cmd>call <SID>CommentWhileTyping()<CR>'
+  endfor
 endif
 
-" Terminal panel
+" Terminal panel (Ctrl-t inside the panel is set up where the panel opens,
+" so it never steals Ctrl-t from Claude or Copilot)
 nnoremap <C-t> :call <SID>ToggleTerminal()<CR>
 nnoremap <leader>t :call <SID>ToggleTerminal()<CR>
-tnoremap <C-t> <C-\><C-n>:call <SID>ToggleTerminal()<CR>
 
-" AI
+" AI: Space a...
 if VS('claude')
   nnoremap <leader>aa :call <SID>ToggleAgent('claude')<CR>
 endif
@@ -631,17 +668,40 @@ if s:Has('copilot.vim')
   imap <C-k> <Plug>(copilot-previous)
   imap <C-l> <Plug>(copilot-accept-word)
 endif
+" Copilot Chat with a selection: open the chat first, then add the selection
+" (the plugin's own way of creating the chat from a selection fails in Vim 9)
+function! s:ChatWithSelection() abort
+  let here = win_getid()
+  if empty(filter(range(1, winnr('$')), {_, w -> getbufvar(winbufnr(w), '&filetype') ==# 'copilot_chat'}))
+    CopilotChatOpen
+    call win_gotoid(here)
+  endif
+  call copilot_chat#buffer#AddSelection()
+endfunction
 if s:Has('copilot-chat.vim')
   nnoremap <leader>ai :CopilotChatOpen<CR>
-  vmap <leader>ai <Plug>CopilotChatAddSelection
+  xnoremap <silent> <leader>ai :<C-u>call <SID>ChatWithSelection()<CR>
   nnoremap <leader>am :CopilotChatModels<CR>
 endif
 
-" Git
+" Git: Space g...
 if s:Has('vim-fugitive')
   nnoremap <leader>gs :Git<CR>
   nnoremap <leader>gb :Git blame<CR>
   nnoremap <leader>gd :Gdiffsplit<CR>
+  nnoremap <leader>gl :0Gclog<CR>
+endif
+if s:Has('vim-gitgutter')
+  nnoremap <leader>gp :GitGutterPreviewHunk<CR>
+  nnoremap <leader>ga :GitGutterStageHunk<CR>
+  nnoremap <leader>gu :GitGutterUndoHunk<CR>
+  " ]c / [c jump between changes (and keep working inside a diff)
+  nmap <expr> ]c &diff ? ']c' : '<Plug>(GitGutterNextHunk)'
+  nmap <expr> [c &diff ? '[c' : '<Plug>(GitGutterPrevHunk)'
+  omap ic <Plug>(GitGutterTextObjectInnerPending)
+  omap ac <Plug>(GitGutterTextObjectOuterPending)
+  xmap ic <Plug>(GitGutterTextObjectInnerVisual)
+  xmap ac <Plug>(GitGutterTextObjectOuterVisual)
 endif
 
 " Splits
@@ -652,19 +712,19 @@ nnoremap <C-k> <C-w>k
 nnoremap <C-l> <C-w>l
 
 " Move selected lines up/down, keep selection when indenting
-vnoremap J :m '>+1<CR>gv=gv
-vnoremap K :m '<-2<CR>gv=gv
-vnoremap < <gv
-vnoremap > >gv
+xnoremap J :m '>+1<CR>gv=gv
+xnoremap K :m '<-2<CR>gv=gv
+xnoremap < <gv
+xnoremap > >gv
 
-" ---------- Code navigation (LSP) ----------
+" ---------- Code navigation (LSP): Space l... ----------
+" Only keys Vim doesn't already use are taken over (gd, gr, K, F2, F12),
+" so built-ins like gi, gt and gp keep working.
 function! s:on_lsp_buffer_enabled() abort
   setlocal omnifunc=lsp#complete
+  if exists('*asyncomplete#enable_for_buffer') | call asyncomplete#enable_for_buffer() | endif
   nmap <buffer> gd <plug>(lsp-definition)
-  nmap <buffer> gp <plug>(lsp-peek-definition)
   nmap <buffer> gr <plug>(lsp-references)
-  nmap <buffer> gi <plug>(lsp-implementation)
-  nmap <buffer> gt <plug>(lsp-type-definition)
   nmap <buffer> K  <plug>(lsp-hover)
   nmap <buffer> <F12>   <plug>(lsp-definition)
   nmap <buffer> <S-F12> <plug>(lsp-references)
@@ -672,18 +732,45 @@ function! s:on_lsp_buffer_enabled() abort
   nmap <buffer> <C-LeftMouse> <LeftMouse><plug>(lsp-definition)
   nmap <buffer> [g <plug>(lsp-previous-diagnostic)
   nmap <buffer> ]g <plug>(lsp-next-diagnostic)
-  nmap <buffer> <leader>rn <plug>(lsp-rename)
-  nmap <buffer> <leader>ca <plug>(lsp-code-action)
-  nmap <buffer> <leader>F  <plug>(lsp-document-format)
-  nmap <buffer> <leader>o  :LspDocumentSymbolSearch<CR>
-  nmap <buffer> <leader>s  :LspWorkspaceSymbolSearch<CR>
-  nmap <buffer> <leader>d  :LspDocumentDiagnostics<CR>
+  nmap <buffer> <leader>lp <plug>(lsp-peek-definition)
+  nmap <buffer> <leader>li <plug>(lsp-implementation)
+  nmap <buffer> <leader>lt <plug>(lsp-type-definition)
+  nmap <buffer> <leader>lr <plug>(lsp-rename)
+  nmap <buffer> <leader>la <plug>(lsp-code-action)
+  nmap <buffer> <leader>lf <plug>(lsp-document-format)
+  nmap <buffer> <leader>lo :LspDocumentSymbolSearch<CR>
+  nmap <buffer> <leader>ls :LspWorkspaceSymbolSearch<CR>
+  nmap <buffer> <leader>ld :LspDocumentDiagnostics<CR>
 endfunction
 augroup lsp_install
   autocmd!
   autocmd User lsp_buffer_enabled call s:on_lsp_buffer_enabled()
 augroup END
 let g:lsp_diagnostics_virtual_text_enabled = 1
+" TypeScript/JavaScript: use typescript-language-server. Left to itself the
+" plugin prefers a global `tsc` if one is installed, which usually can't act
+" as a language server, so go-to-definition silently does nothing.
+for s:ft in ['typescript', 'typescriptreact', 'javascript', 'javascriptreact']
+  let g:lsp_settings_filetype_{s:ft} = 'typescript-language-server'
+endfor
+
+" Suggestions pop up as you type only in files with a language server, so
+" Vim's own Ctrl-n / Ctrl-p word completion works normally everywhere else.
+" While Ctrl-n / Ctrl-p completion is open, the automatic menu waits.
+let g:asyncomplete_enable_for_all = 0
+function! s:BuiltinComplete(key) abort
+  if !pumvisible() && get(b:, 'asyncomplete_enable', 0)
+    let b:asyncomplete_enable = 0
+    let b:vs_resume_asyncomplete = 1
+  endif
+  return a:key
+endfunction
+if s:Has('asyncomplete.vim')
+  inoremap <expr> <C-n> <SID>BuiltinComplete("\<C-n>")
+  inoremap <expr> <C-p> <SID>BuiltinComplete("\<C-p>")
+  autocmd vimsetup CompleteDone,InsertLeave * if get(b:, 'vs_resume_asyncomplete', 0)
+        \ | let b:asyncomplete_enable = 1 | unlet b:vs_resume_asyncomplete | endif
+endif
 
 " Tab: move through the autocomplete menu when it's open, otherwise accept
 " Copilot's grey suggestion, otherwise insert a normal Tab.

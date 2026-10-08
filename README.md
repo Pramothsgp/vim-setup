@@ -42,22 +42,33 @@ vim ~/projects/my-project
 
 On Windows, use it inside WSL.
 
-## First steps
+## Learn it: Vim from 0 to 100
+
+**[CHEATSHEET.md](CHEATSHEET.md)** takes you from your first `vim file` to working in it every day, in 14 levels. Every row shows the keys, where the cursor starts, the text before and after, and what happened. Every row that doesn't need a sign-in or a mouse is checked automatically against this config, so what it says is what Vim does.
+
+First steps:
 
 | Keys | Does |
 | --- | --- |
 | `Ctrl-p` | Find a file |
-| `Space g` | Search the project |
+| `Space s` | Search the project |
 | `Space e` | Toggle the explorer |
-| `Shift-l` / `Shift-h` | Next / previous open file |
+| `]b` / `[b` | Next / previous open file |
 | `Space c` | Close the file |
 | `Ctrl-s` | Save |
 | `gd` / `Ctrl-o` | Go to definition / back |
 | `Ctrl-t` | Terminal panel |
 
-For go-to-definition and autocomplete, open a file of each language you use and run `:LspInstallServer` once.
+Leader keys are grouped so none is the start of another: single keys for files and windows, `Space l…` for code, `Space g…` for Git, `Space a…` for AI. For go-to-definition and autocomplete, open a file of each language you use and run `:LspInstallServer` once.
 
-Everything else is in **[CHEATSHEET.md](CHEATSHEET.md)**.
+## Check it on your machine
+
+```bash
+~/.vim-setup/tests/run.sh            # every shortcut in the guide, about 5 minutes
+~/.vim-setup/tests/run.sh git        # just the cases whose name matches
+```
+
+It runs each guide entry in a real Vim with your config, in a throwaway copy of a sample project, and reports any that behave differently. Parts you didn't install are skipped with the reason. Nothing in your own projects is touched. (Python 3 is needed to run it.)
 
 ## AI: Copilot and Claude
 
@@ -99,7 +110,11 @@ Files the agents edit reload in Vim automatically.
 
 ## Hiding files per project
 
-`Space x` on an item in the explorer hides it; `:Hide node_modules *.log` hides by name. Each project keeps its own list in a `.ignore` file at its root, which also applies to `Ctrl-p` and `Space g`. The installer adds `.ignore` to your global gitignore so these lists never end up in commits.
+`Space x` on an item in the explorer hides it; `:Hide node_modules *.log` hides by name. Each project keeps its own list in a `.ignore` file at its root, which also applies to `Ctrl-p` and `Space s`. The installer adds `.ignore` to your global gitignore so these lists never end up in commits.
+
+## Editing the guide
+
+The guide is generated: each level lives in `guide/levels/`, where an entry holds its keys, the text before and after, and the explanation. After editing one, run `python3 guide/build.py` to rewrite CHEATSHEET.md, then `tests/run.sh` to check it.
 
 ## Customising one machine
 
