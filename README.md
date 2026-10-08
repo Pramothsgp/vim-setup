@@ -1,6 +1,6 @@
 # vim-setup
 
-Terminal Vim that works like VS Code: a file explorer on the left, open files as tabs along the top, fuzzy file search, project-wide search, go-to-definition, autocomplete, Git diff and blame, multiple cursors and a built-in terminal panel. One command sets it up on any Mac or Linux machine.
+Terminal Vim that works like VS Code: a file explorer on the left, open files as tabs along the top, fuzzy file search, project-wide search, go-to-definition, autocomplete, GitHub Copilot suggestions, a Claude Code side panel, Git diff and blame, multiple cursors and a built-in terminal panel. One command sets it up on any Mac or Linux machine.
 
 ## Install
 
@@ -45,6 +45,30 @@ On Windows, use it inside WSL.
 For go-to-definition and autocomplete, open a file of each language you use and run `:LspInstallServer` once.
 
 Everything else is in **[CHEATSHEET.md](CHEATSHEET.md)**.
+
+## AI: Copilot and Claude
+
+**GitHub Copilot** shows grey suggestions as you type. Run `:Copilot setup` once in Vim and sign in with GitHub; it needs a Copilot plan (there's a free tier, and verified students get free access). `Tab` accepts a suggestion.
+
+**Claude** runs as Claude Code in a panel on the right, where it can read, explain and edit your project. Install it once (needs a Claude Pro, Max, Team, Enterprise or Console account):
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+| Keys | Does |
+| --- | --- |
+| `Tab` | Accept Copilot's suggestion (when the autocomplete menu is closed) |
+| `Ctrl-]` | Dismiss the suggestion |
+| `Ctrl-j` / `Ctrl-k` | Next / previous suggestion |
+| `Ctrl-l` | Accept just the next word |
+| `Space ap` | Panel with up to 10 suggestions |
+| `Space ac` | Turn Copilot on / off |
+| `Space aa` | Open / hide the Claude panel |
+| `Space af` | Reference this file in Claude's prompt; in visual mode, the selected lines too |
+| `Ctrl-w h` | From the Claude panel back to the editor |
+
+Files Claude edits reload in Vim automatically.
 
 ## Hiding files per project
 

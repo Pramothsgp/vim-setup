@@ -119,10 +119,10 @@ install_plugins() {
     curl -fsSLo "$HOME/.vim/autoload/plug.vim" --create-dirs \
       https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
   fi
-  vim -Es -i NONE -u "$VIMRC_DST" -c 'PlugInstall --sync' -c 'qa!' >/dev/null 2>&1 || true
+  vim -Es -i NONE --cmd 'set t_Co=256' -u "$VIMRC_DST" -c 'PlugInstall --sync' -c 'qa!' >/dev/null 2>&1 || true
 
   local missing
-  missing="$(vim -Es -i NONE -u "$VIMRC_DST" \
+  missing="$(vim -Es -i NONE --cmd 'set t_Co=256' -u "$VIMRC_DST" \
     -c 'call writefile(keys(filter(copy(g:plugs), "!isdirectory(v:val.dir)")), "/dev/stdout")' \
     -c 'qa!' 2>/dev/null || true)"
   if [ -n "$missing" ]; then
@@ -187,5 +187,7 @@ install_plugins
 
 echo
 say "Done. Open a new terminal, then:  vim ~/projects/<some-project>"
+echo "    AI: run :Copilot setup once inside Vim; for Claude, install Claude Code"
+echo "        (curl -fsSL https://claude.ai/install.sh | bash) and press Space aa"
 echo "    Cheat sheet: $REPO_DIR/CHEATSHEET.md"
 echo "    Update later: cd $REPO_DIR && git pull && ./install.sh --no-deps"

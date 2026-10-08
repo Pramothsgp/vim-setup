@@ -32,6 +32,8 @@ These come from this repo's `vimrc`; plain Vim doesn't have them.
 | `Space o` / `Space s` | Go to symbol in file / in project |
 | `Space rn` / `Space ca` / `Space F` | Rename / code action / format |
 | `Space d` | List problems in the file |
+| `Space aa` / `Space af` | Claude panel / send this file or selection to Claude |
+| `Space ac` / `Space ap` | Copilot on-off / suggestions panel |
 | `jk` (insert mode) | Back to Normal mode |
 | `J` / `K` (visual mode) | Move selected lines down / up |
 
@@ -512,6 +514,39 @@ Inside a diff: `]c` / `[c` jump between changes, `do` pulls the other side's ver
 | Drop a commit | `dd` |
 | Move a commit down / up | `ddp` / `ddkP` |
 | Finish / abort | `:x` / `:cq` |
+
+## AI
+
+### GitHub Copilot (grey suggestions as you type)
+
+Run `:Copilot setup` once and sign in with GitHub.
+
+| Keys | Does |
+| --- | --- |
+| `Tab` | Accept the suggestion (when the autocomplete menu is closed) |
+| `Ctrl-]` | Dismiss the suggestion |
+| `Ctrl-j` / `Ctrl-k` | Next / previous suggestion (also `Alt-]` / `Alt-[`) |
+| `Ctrl-l` | Accept just the next word |
+| `Space ap` or `:Copilot panel` | Window with up to 10 suggestions |
+| `Space ac` | Turn suggestions on / off |
+| `:Copilot status` | Check sign-in and whether it's working |
+
+If the autocomplete menu is open, `Tab` moves through the menu instead; press `Ctrl-e` to close the menu, then `Tab` takes Copilot's suggestion.
+
+### Claude Code (side panel)
+
+| Keys | Does |
+| --- | --- |
+| `Space aa` | Open / hide the Claude panel on the right |
+| `Space af` | Type `@this/file.py` into Claude's prompt, ready for your question |
+| `Space af` (visual) | Same, plus the selected line numbers |
+| `Ctrl-w h` | From the Claude panel back to the editor |
+| `Ctrl-w l` | From the editor into the Claude panel |
+| `Esc` (in the panel) | Interrupt Claude |
+| `Shift-Tab` (in the panel) | Cycle Claude's permission modes, e.g. plan mode |
+| `/` (in the panel) | Claude's commands, e.g. `/clear`, `/resume` |
+
+Files Claude changes reload in Vim automatically when you move back to them.
 
 ## Handy commands
 

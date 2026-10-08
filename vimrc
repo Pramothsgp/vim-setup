@@ -16,6 +16,7 @@ if empty(glob(data_dir . '/autoload/plug.vim'))
 endif
 
 " ---------- Plugins ----------
+let g:plug_timeout = 300            " big plugins (Copilot) on slow networks
 call plug#begin('~/.vim/plugged')
   " Look
   Plug 'morhetz/gruvbox'                    " colour scheme
@@ -47,6 +48,11 @@ call plug#begin('~/.vim/plugged')
   Plug 'mattn/vim-lsp-settings'             " :LspInstallServer per language
   Plug 'prabirshrestha/asyncomplete.vim'
   Plug 'prabirshrestha/asyncomplete-lsp.vim'
+
+  " AI: GitHub Copilot inline suggestions (needs Node.js; run :Copilot setup once)
+  if executable('node')
+    Plug 'github/copilot.vim'
+  endif
 call plug#end()
 
 " Install any plugin added to the list above that isn't downloaded yet
@@ -105,7 +111,8 @@ let g:AutoPairsMultilineClose = 0
 autocmd FileType javascript,typescript,typescriptreact,javascriptreact,json,yaml,html,css setlocal ts=2 sw=2 sts=2
 " Commit messages: spellcheck and wrap at 72
 autocmd FileType gitcommit setlocal spell textwidth=72
-autocmd FocusGained,BufEnter * silent! checktime
+" (also picks up edits Claude makes to open files)
+autocmd FocusGained,BufEnter,CursorHold * silent! checktime
 
 " ---------- Search ----------
 set incsearch hlsearch
@@ -248,6 +255,88 @@ function! s:ToggleTerminal() abort
     botright terminal ++rows=12 ++kill=term
     let g:panel_term = bufnr('%')
     setlocal nobuflisted
+    " Esc Esc leaves typing mode here only (Claude's panel needs its own Esc)
+    tnoremap <buffer> <Esc><Esc> <C-\><C-n>
+  endif
+endfunction
+
+" ---------- Claude Code panel (like the Claude sidebar in VS Code) ----------
+function! s:ClaudeWidth() abort
+  return max([60, &columns * 2 / 5])
+endfunction
+
+function! s:ClaudeBuf() abort
+  let buf = get(g:, 'claude_term', -1)
+  return bufexists(buf) && term_getstatus(buf) =~# 'running' ? buf : -1
+endfunction
+
+function! s:OpenClaude() abort
+  if !executable('claude')
+    echohl WarningMsg
+    echo 'Claude Code is not installed. In a terminal: curl -fsSL https://claude.ai/install.sh | bash'
+    echohl None
+    return 0
+  endif
+  execute 'vertical botright terminal ++close ++kill=term ++cols=' . s:ClaudeWidth() . ' claude'
+  let g:claude_term = bufnr('%')
+  setlocal nobuflisted
+  return 1
+endfunction
+
+function! s:ShowClaude(buf) abort
+  let win = bufwinid(a:buf)
+  if win != -1
+    call win_gotoid(win)
+  else
+    execute 'vertical botright sbuffer' a:buf
+    execute 'vertical resize' s:ClaudeWidth()
+  endif
+endfunction
+
+function! s:ToggleClaude() abort
+  let buf = s:ClaudeBuf()
+  if buf == -1
+    call s:OpenClaude()
+  elseif bufwinid(buf) != -1
+    execute win_id2win(bufwinid(buf)) . 'hide'
+  else
+    call s:ShowClaude(buf)
+  endif
+endfunction
+
+" Type a reference to this file (and the selected lines) into Claude's
+" prompt, so you only have to add the question
+function! s:SendToClaude(line1, line2) abort
+  if &buftype !=# '' || empty(expand('%'))
+    echo 'Open a file first' | return
+  endif
+  let ref = '@' . expand('%:.') . ' '
+  if a:line1 > 0
+    let ref .= (a:line1 == a:line2 ? 'line ' . a:line1 : 'lines ' . a:line1 . '-' . a:line2) . ' '
+  endif
+  let buf = s:ClaudeBuf()
+  if buf == -1
+    if !s:OpenClaude() | return | endif
+    let buf = g:claude_term
+    call timer_start(2000, {-> term_sendkeys(buf, ref)})   " let Claude start first
+  else
+    call s:ShowClaude(buf)
+    call term_sendkeys(buf, ref)
+  endif
+endfunction
+
+" ---------- GitHub Copilot ----------
+let g:copilot_no_tab_map = v:true     " Tab is shared with autocomplete below
+function! s:ToggleCopilot() abort
+  if !exists('g:loaded_copilot')
+    echo 'Copilot is not installed (it needs Node.js)' | return
+  endif
+  if copilot#Enabled()
+    Copilot disable
+    echo 'Copilot suggestions off'
+  else
+    Copilot enable
+    echo 'Copilot suggestions on'
   endif
 endfunction
 
@@ -307,7 +396,19 @@ imap <C-_> <Esc>gcca
 nnoremap <C-t> :call <SID>ToggleTerminal()<CR>
 nnoremap <leader>t :call <SID>ToggleTerminal()<CR>
 tnoremap <C-t> <C-\><C-n>:call <SID>ToggleTerminal()<CR>
-tnoremap <Esc><Esc> <C-\><C-n>
+
+" AI: Claude panel and Copilot
+nnoremap <leader>aa :call <SID>ToggleClaude()<CR>
+nnoremap <leader>af :call <SID>SendToClaude(0, 0)<CR>
+xnoremap <leader>af :<C-u>call <SID>SendToClaude(line("'<"), line("'>"))<CR>
+nnoremap <leader>ac :call <SID>ToggleCopilot()<CR>
+nnoremap <leader>ap :Copilot panel<CR>
+if executable('node')
+  " Alternatives to Copilot's Alt keys, which macOS terminals don't send by default
+  imap <C-j> <Plug>(copilot-next)
+  imap <C-k> <Plug>(copilot-previous)
+  imap <C-l> <Plug>(copilot-accept-word)
+endif
 
 " Git
 nnoremap <leader>gs :Git<CR>
@@ -355,8 +456,11 @@ augroup lsp_install
 augroup END
 let g:lsp_diagnostics_virtual_text_enabled = 1
 
-" Autocomplete: Tab / Shift-Tab to move, Enter to accept
-inoremap <expr> <Tab>   pumvisible() ? "\<C-n>" : "\<Tab>"
+" Tab: move through the autocomplete menu when it's open, otherwise accept
+" Copilot's grey suggestion, otherwise insert a normal Tab
+" Shift-Tab moves back through the menu, Enter accepts from the menu
+imap <silent><script><expr> <Tab> pumvisible() ? "\<C-n>"
+      \ : exists('g:loaded_copilot') ? copilot#Accept("\<Tab>") : "\<Tab>"
 inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<S-Tab>"
 inoremap <expr> <CR>    pumvisible() ? asyncomplete#close_popup() : "\<CR>"
 
