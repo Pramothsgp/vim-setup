@@ -93,7 +93,7 @@ section("Undo and redo", "Undo history is kept even after you close and reopen a
 ]),
 
 section("Help", "Vim's manual is built in and excellent.", [
-    UI("`:help ciw` Enter", "Anywhere", "A help window opens at the entry for `ciw`",
+    UI("`:help iw` Enter", "Anywhere", "A help window opens at the entry for `iw` (inner word)",
        "`:help` plus any key, command or topic. `:q` closes help.",
        ["&filetype ==# 'help'", "getline('.') =~# 'iw'"], feed=":help iw<CR>"),
     UI("`Ctrl-]`", "In a help window, on a link (text between `|` bars)",

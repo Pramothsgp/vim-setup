@@ -21,11 +21,11 @@ section("Ways into Insert mode", "Each starts typing at a different place. Pick 
 ]),
 
 section("While typing (Insert mode)", "Small fixes without leaving Insert mode.", [
-    E("`Ctrl-w`", "While typing", "▌", "one ▌", "Delete the word before the cursor.", feed="ione two<C-w>", mode="i"),
-    E("`Ctrl-u`", "While typing", "▌", "▌", "Delete everything typed on this line.", feed="ione two<C-u>", mode="i"),
-    E("`Ctrl-o` + a command", "While typing", "▌", "X▌ab", "Run one Normal-mode command and keep typing. Here `Ctrl-o` `0` jumps to the line start, then `X` is typed.", feed="iab<C-o>0X", mode="i"),
-    E("`Ctrl-t` / `Ctrl-d`", "While typing", "▌", "    x▌", "Indent / unindent the current line.", feed="ix<C-t>", mode="i"),
-    E("`Ctrl-v` `Tab`", "While typing", "▌", "\tx▌", "Insert the next key literally — here a real Tab character instead of spaces.", feed="i<C-v><Tab>x", mode="i"),
+    E("`Ctrl-w`", "While typing", "▌", "one ▌", "Delete the word before the cursor. Here: typed `one two`, then `Ctrl-w`.", feed="ione two<C-w>", mode="i"),
+    E("`Ctrl-u`", "While typing", "▌", "▌", "Delete everything typed on this line. Here: typed `one two`, then `Ctrl-u`.", feed="ione two<C-u>", mode="i"),
+    E("`Ctrl-o` + a command", "While typing", "▌", "X▌ab", "Run one Normal-mode command and keep typing. Here: typed `ab`, then `Ctrl-o` `0` jumped to the line start, then typed `X`.", feed="iab<C-o>0X", mode="i"),
+    E("`Ctrl-t` / `Ctrl-d`", "While typing", "▌", "    x▌", "Indent / unindent the current line. Here: typed `x`, then `Ctrl-t`.", feed="ix<C-t>", mode="i"),
+    E("`Ctrl-v` `Tab`", "While typing", "▌", "\tx▌", "Insert the next key literally. Here: `Ctrl-v` `Tab` put a real Tab character (not spaces), then typed `x`.", feed="i<C-v><Tab>x", mode="i"),
 ]),
 
 section("Single-key changes", "", [

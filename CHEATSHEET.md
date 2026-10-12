@@ -128,7 +128,7 @@ Vim's manual is built in and excellent.
 
 | Keys | Cursor starts | Before ↓ after | What happens |
 | --- | --- | --- | --- |
-| `:help ciw` Enter | Anywhere | A help window opens at the entry for `ciw` | `:help` plus any key, command or topic. `:q` closes help. |
+| `:help iw` Enter | Anywhere | A help window opens at the entry for `iw` (inner word) | `:help` plus any key, command or topic. `:q` closes help. |
 | `Ctrl-]` | In a help window, on a link (text between `\|` bars) | Jumps to that topic | Follows a link. `Ctrl-o` goes back. |
 | `Ctrl-o` | After following a help link | Back where you were | Goes back to the previous position (works everywhere, not just in help). |
 | `vimtutor` | In your terminal | An interactive 30-minute lesson opens | The best first step: it teaches the basics by having you do them. †*Not checked automatically: Runs outside Vim; just type it in your terminal.* |
@@ -167,7 +167,7 @@ A **word** is letters, digits and `_`; punctuation counts as its own word. A
 
 | Keys | Cursor starts | Before ↓ after | What happens |
 | --- | --- | --- | --- |
-| `0` | Anywhere on the line | `····hello wor▌ld`<br>↓<br>`▌    hello world` | Very start of the line, even before the indent. |
+| `0` | Anywhere on the line | `····hello wor▌ld`<br>↓<br>`▌····hello world` | Very start of the line, even before the indent. |
 | `^` | Anywhere on the line | `····hello wor▌ld`<br>↓<br>`····▌hello world` | First non-blank character: where the code starts. |
 | `$` | Anywhere on the line | `▌hello world`<br>↓<br>`hello worl▌d` | Last character of the line. |
 | `f,` | At the start | `▌call(a, b, c)`<br>↓<br>`call(a▌, b, c)` | **f**ind: jump onto the next `,` on this line. Works with any character. |
@@ -233,11 +233,11 @@ Small fixes without leaving Insert mode.
 
 | Keys | Cursor starts | Before ↓ after | What happens |
 | --- | --- | --- | --- |
-| `Ctrl-w` | While typing | `▌`<br>↓<br>`one ▌` | Delete the word before the cursor. |
-| `Ctrl-u` | While typing | `▌`<br>↓<br>`▌` | Delete everything typed on this line. |
-| `Ctrl-o` + a command | While typing | `▌`<br>↓<br>`X▌ab` | Run one Normal-mode command and keep typing. Here `Ctrl-o` `0` jumps to the line start, then `X` is typed. |
-| `Ctrl-t` / `Ctrl-d` | While typing | `▌`<br>↓<br>`····x▌` | Indent / unindent the current line. |
-| `Ctrl-v` `Tab` | While typing | `▌`<br>↓<br>`⇥x▌` | Insert the next key literally — here a real Tab character instead of spaces. |
+| `Ctrl-w` | While typing | `▌`<br>↓<br>`one ▌` | Delete the word before the cursor. Here: typed `one two`, then `Ctrl-w`. |
+| `Ctrl-u` | While typing | `▌`<br>↓<br>`▌` | Delete everything typed on this line. Here: typed `one two`, then `Ctrl-u`. |
+| `Ctrl-o` + a command | While typing | `▌`<br>↓<br>`X▌ab` | Run one Normal-mode command and keep typing. Here: typed `ab`, then `Ctrl-o` `0` jumped to the line start, then typed `X`. |
+| `Ctrl-t` / `Ctrl-d` | While typing | `▌`<br>↓<br>`····x▌` | Indent / unindent the current line. Here: typed `x`, then `Ctrl-t`. |
+| `Ctrl-v` `Tab` | While typing | `▌`<br>↓<br>`⇥x▌` | Insert the next key literally. Here: `Ctrl-v` `Tab` put a real Tab character (not spaces), then typed `x`. |
 
 ### Single-key changes
 
@@ -294,11 +294,11 @@ learn one new motion and it works with every operator. Doubling an operator
 | Keys | Cursor starts | Before ↓ after | What happens |
 | --- | --- | --- | --- |
 | `dw` | On the first letter of `one` | `▌one two`<br>↓<br>`▌two` | Delete to the start of the next word (the space goes too). |
-| `de` | On the first letter of `one` | `▌one two`<br>↓<br>`▌ two` | Delete to the end of the word (the space stays). |
+| `de` | On the first letter of `one` | `▌one two`<br>↓<br>`▌·two` | Delete to the end of the word (the space stays). |
 | `d$`  (same as `D`) | On the `e` of `one` | `on▌e two`<br>↓<br>`o▌n` | Delete to the end of the line. |
 | `d0` | On the `w` of `two` | `one t▌wo`<br>↓<br>`▌wo` | Delete back to the start of the line. |
 | `dt)` | On the `a` | `f(▌a, b)`<br>↓<br>`f(▌)` | Delete **till** the `)`: everything up to, not including, it. |
-| `df,` | On the `a` | `▌a, b`<br>↓<br>`▌ b` | Delete up to and **including** the `,`. |
+| `df,` | On the `a` | `▌a, b`<br>↓<br>`▌·b` | Delete up to and **including** the `,`. |
 | `dj` | On line 1 | `▌1`<br>`2`<br>`3`<br>↓<br>`▌3` | Delete this line and the one below (vertical motions delete whole lines). |
 | `dG` | On line 2 | `1`<br>`▌2`<br>`3`<br>↓<br>`▌1` | Delete to the end of the file. |
 | `dgg` | On line 2 | `1`<br>`▌2`<br>`3`<br>↓<br>`▌3` | Delete to the start of the file. |
@@ -436,7 +436,7 @@ Move with any motion to grow the selection. `Esc` cancels.
 | Keys | Cursor starts | Before ↓ after | What happens |
 | --- | --- | --- | --- |
 | `U` / `u` / `~` | After selecting | `▌hello there`<br>↓<br>`▌HELLO there` | Uppercase / lowercase / toggle case of the selection. |
-| `>` / `<` | After selecting lines | `▌a`<br>`b`<br>↓<br>`····a`<br>`▌    b` | Indent / unindent. This config keeps the selection, so press `>` again to indent more. |
+| `>` / `<` | After selecting lines | `▌a`<br>`b`<br>↓<br>`····a`<br>`▌····b` | Indent / unindent. This config keeps the selection, so press `>` again to indent more. |
 | `J` / `K` | After selecting lines | `▌1`<br>`2`<br>`3`<br>↓<br>`2`<br>`▌1`<br>`3` | Move the selected lines down / up (this config). Keeps the selection. |
 | `c` | After selecting | `▌hello there`<br>↓<br>`bye▌ there` | Change the selection. |
 | `y` then `P` | After selecting | `▌ab cd`<br>↓<br>`a▌bab cd` | Copy the selection, then paste. |
@@ -855,7 +855,7 @@ Suggestions appear as you type in files with a language server. `Ctrl-n` /
 | Keys | Cursor starts | Before ↓ after | What happens |
 | --- | --- | --- | --- |
 | `gg=G` | Anywhere | `▌function f() {`<br>`return 1;`<br>`}`<br>↓<br>`▌function f() {`<br>`··return 1;`<br>`}` | Re-indent the whole file. `=ip` does a paragraph, `==` a line. |
-| `:retab` Enter | Anywhere | `▌⇥x`<br>↓<br>`▌    x` | Turn Tab characters into spaces. |
+| `:retab` Enter | Anywhere | `▌⇥x`<br>↓<br>`▌····x` | Turn Tab characters into spaces. |
 
 ### Folding
 
@@ -1094,7 +1094,7 @@ lines 2 to 5, `.` the current line, `.,+2` this line and the next two,
 | `Ctrl-s` freezes the terminal | Press `Ctrl-q` to unfreeze. The installer adds `stty -ixon` to your shell config so `Ctrl-s` reaches Vim; open a new terminal. |
 | `Alt-…` keys type odd characters on a Mac | Make Option send Esc: iTerm2 → Profiles → Keys → Left Option key: Esc+; Terminal.app → Settings → Profiles → Keyboard → Use Option as Meta key. |
 | `F2` / `F12` don't work on a Mac | Hold `Fn`, or use `Space lr` and `gd`. |
-| Copy/paste doesn't reach other apps | Your Vim lacks clipboard support: `vim --version | grep clipboard` should show `+clipboard`. Homebrew's Vim has it. |
+| Copy/paste doesn't reach other apps | Your Vim lacks clipboard support: `vim --version \| grep clipboard` should show `+clipboard`. Homebrew's Vim has it. |
 | `gd`, `K`, completion do nothing | Run `:LspStatus`. If no server is listed, open a file of that language and run `:LspInstallServer`. |
 | Copilot shows nothing | `:Copilot status`; if not signed in, `:Copilot setup`. |
 | Something looks wrong after editing the config | `:source ~/.vimrc` reloads it; `tests/run.sh` checks every shortcut in this guide. |

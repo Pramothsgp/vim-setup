@@ -61,7 +61,7 @@ TROUBLE = [
     ("`Ctrl-s` freezes the terminal", "Press `Ctrl-q` to unfreeze. The installer adds `stty -ixon` to your shell config so `Ctrl-s` reaches Vim; open a new terminal."),
     ("`Alt-…` keys type odd characters on a Mac", "Make Option send Esc: iTerm2 → Profiles → Keys → Left Option key: Esc+; Terminal.app → Settings → Profiles → Keyboard → Use Option as Meta key."),
     ("`F2` / `F12` don't work on a Mac", "Hold `Fn`, or use `Space lr` and `gd`."),
-    ("Copy/paste doesn't reach other apps", "Your Vim lacks clipboard support: `vim --version | grep clipboard` should show `+clipboard`. Homebrew's Vim has it."),
+    ("Copy/paste doesn't reach other apps", "Your Vim lacks clipboard support: `vim --version \\| grep clipboard` should show `+clipboard`. Homebrew's Vim has it."),
     ("`gd`, `K`, completion do nothing", "Run `:LspStatus`. If no server is listed, open a file of that language and run `:LspInstallServer`."),
     ("Copilot shows nothing", "`:Copilot status`; if not signed in, `:Copilot setup`."),
     ("Something looks wrong after editing the config", "`:source ~/.vimrc` reloads it; `tests/run.sh` checks every shortcut in this guide."),
@@ -91,9 +91,10 @@ def show_text(text):
         if line.replace("▌", "") == "":
             out.append(code(line) if "▌" in line else "*(empty line)*")
             continue
-        stripped = line.lstrip(" ")
-        lead = len(line) - len(stripped)
-        line = "·" * lead + stripped
+        mark = "▌" if line.startswith("▌") else ""
+        body = line[len(mark):]
+        stripped = body.lstrip(" ")
+        line = mark + "·" * (len(body) - len(stripped)) + stripped
         line = line.replace("\t", "⇥")
         out.append(code(line))
     return "<br>".join(out)
@@ -168,6 +169,50 @@ def render(levels):
     return "\n".join(out) + "\n"
 
 
+# ---------- the same guide for a doc editor (no HTML in table cells) ----------
+def doc_text(text):
+    parts = []
+    for line in text.split("\n"):
+        if line.replace("▌", "") == "":
+            parts.append(code(line) if "▌" in line else "*(empty)*")
+            continue
+        mark = "▌" if line.startswith("▌") else ""
+        body = line[len(mark):]
+        stripped = body.lstrip(" ")
+        parts.append(code((mark + "·" * (len(body) - len(stripped)) + stripped).replace("\t", "⇥")))
+    return " ⏎ ".join(parts)
+
+
+def render_doc_parts(levels):
+    parts = {}
+    g = ["## This setup's shortcuts at a glance\n",
+         "Space is the leader key. Each one is explained, with an example, in the levels below.\n",
+         "| | Keys | Does |", "| --- | --- | --- |"]
+    for group, rows in QUICK:
+        for n, (keys, does) in enumerate(rows):
+            g.append(f"| {('**' + group + '**') if n == 0 else ''} | {keys.replace('|', chr(92) + '|')} | {does} |")
+    parts["glance"] = "\n".join(g) + "\n"
+    for lv in levels:
+        w = [f"## Level {lv['number']}: {lv['title']}\n", " ".join(lv["intro"].split()) + "\n"]
+        for sec in lv["sections"]:
+            w.append(f"### {sec['title']}\n")
+            if sec.get("intro"):
+                w.append(" ".join(sec["intro"].split()) + "\n")
+            w += ["| Keys | Cursor starts | Before → after | What happens |", "| --- | --- | --- | --- |"]
+            for e in sec["entries"]:
+                does = cell(e["does"])
+                if e.get("manual"):
+                    does += f" †*Not checked automatically: {cell(e['manual'])}*"
+                change = (f"{doc_text(e['before'])} → {doc_text(e['after'])}"
+                          if "before" in e and "after" in e else cell(e.get("result", "")))
+                w.append(f"| {e['keys'].replace('|', chr(92) + '|')} | {cell(e['where'])} | {change} | {does} |")
+            w.append("")
+        parts[f"level{lv['number']:02d}"] = "\n".join(w)
+    t = ["## When a key doesn't work\n", "| Problem | Fix |", "| --- | --- |"]
+    parts["trouble"] = "\n".join(t + [f"| {p} | {f} |" for p, f in TROUBLE]) + "\n"
+    return parts
+
+
 # ---------- test cases ----------
 def cases(levels):
     out = []
@@ -197,9 +242,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cases")
     ap.add_argument("--out", default=str(REPO / "CHEATSHEET.md"))
+    ap.add_argument("--doc", help="also write the guide as one markdown file per part into this folder")
     args = ap.parse_args()
     levels = with_ids(load_levels())
     pathlib.Path(args.out).write_text(render(levels))
+    if args.doc:
+        for name, md in render_doc_parts(levels).items():
+            (pathlib.Path(args.doc) / f"{name}.md").write_text(md)
     cs = cases(levels)
     if args.cases:
         pathlib.Path(args.cases).write_text(json.dumps([c for c in cs if not c.get("manual")] +
