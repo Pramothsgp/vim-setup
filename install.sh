@@ -252,9 +252,11 @@ pkg_install() {   # pkg_install <brew names> -- <apt> -- <dnf> -- <pacman> -- <z
     if have sudo; then sudo="sudo"; else warn "Not root and no sudo: skipping packages."; return; fi
   fi
   if have apt-get; then
-    $sudo apt-get update -qq
+    $sudo apt-get update -qq || warn "apt-get update failed; trying the install anyway."
+    # Keep existing config files instead of stopping at dpkg's "keep or replace?" prompt.
     # shellcheck disable=SC2086
-    $sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $APT_PKGS
+    $sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+      -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold $APT_PKGS
   elif have dnf; then
     # shellcheck disable=SC2086
     $sudo dnf install -y $DNF_PKGS
@@ -332,7 +334,8 @@ setup_ai_tools() {
       else curl -fsSL https://gh.io/copilot-install | bash; fi
       ok "Copilot CLI installed (type /login the first time you open it)"
     else
-      warn "Copilot CLI panel is on, but the CLI isn't installed: brew install --cask copilot-cli"
+      if have brew; then hint="brew install --cask copilot-cli"; else hint="npm install -g @github/copilot"; fi
+      warn "Copilot CLI panel is on, but the CLI isn't installed: $hint"
     fi
   fi
 }
@@ -444,7 +447,8 @@ any_ai || INSTALL_AI=0
 if [ "$DO_DEPS" = 1 ]; then
   plan_packages
   if ask "Install the packages this setup needs ($BREW_PKGS)? Uses Homebrew or sudo." y; then
-    say "Installing packages"; pkg_install
+    say "Installing packages"
+    pkg_install || warn "The package manager reported an error (see above). Carrying on with what is already installed."
   else
     DO_DEPS=0
   fi
