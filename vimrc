@@ -682,6 +682,10 @@ if s:Has('copilot-chat.vim')
   nnoremap <leader>ai :CopilotChatOpen<CR>
   xnoremap <silent> <leader>ai :<C-u>call <SID>ChatWithSelection()<CR>
   nnoremap <leader>am :CopilotChatModels<CR>
+  " In the chat, Enter sends while typing (like VS Code); Ctrl-j adds a new line
+  autocmd vimsetup FileType copilot_chat
+        \ inoremap <buffer><expr> <CR> pumvisible() ? "\<C-y>" : "\<Esc>\<Cmd>CopilotChatSubmit\<CR>"
+        \ | inoremap <buffer> <C-j> <CR>
 endif
 
 " Git: Space g...

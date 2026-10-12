@@ -1010,7 +1010,7 @@ use each one, so the sign-in steps can't be tested automatically.
 
 | Keys | Cursor starts | Before ↓ after | What happens |
 | --- | --- | --- | --- |
-| `Space ai` | Anywhere | A chat window opens (it asks you to sign in with GitHub the first time) | Ask Copilot anything; press `Enter` in Normal mode to send. †*Not checked automatically: Opening the chat starts a GitHub sign-in, so it needs your account.* |
+| `Space ai` | Anywhere | A chat window opens (it asks you to sign in with GitHub the first time) | Ask Copilot anything: type, then `Enter` sends (`Ctrl-j` adds a new line instead). †*Not checked automatically: Opening the chat starts a GitHub sign-in, so it needs your account.* |
 | `Space ai` (with code selected) | With lines selected | The chat opens with your code pasted in | Ask about specific code. †*Not checked automatically: Needs a GitHub sign-in, like the chat itself.* |
 | `#file:` in the chat | Typing in the chat | Attaches a project file; `Tab` completes the name | Give the chat more context. †*Not checked automatically: Needs a Copilot sign-in to get an answer.* |
 | `Space am` | Anywhere | Pick which AI model the chat uses | Choose a model. †*Not checked automatically: Needs a Copilot sign-in to list models.* |

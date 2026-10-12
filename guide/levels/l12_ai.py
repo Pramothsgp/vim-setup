@@ -31,7 +31,7 @@ section("Agent panels: Claude Code and Copilot CLI", "", [
 ]),
 
 section("Copilot Chat", "", [
-    M("`Space ai`", "Anywhere", "A chat window opens (it asks you to sign in with GitHub the first time)", "Ask Copilot anything; press `Enter` in Normal mode to send.",
+    M("`Space ai`", "Anywhere", "A chat window opens (it asks you to sign in with GitHub the first time)", "Ask Copilot anything: type, then `Enter` sends (`Ctrl-j` adds a new line instead).",
       "Opening the chat starts a GitHub sign-in, so it needs your account."),
     M("`Space ai` (with code selected)", "With lines selected", "The chat opens with your code pasted in", "Ask about specific code.",
       "Needs a GitHub sign-in, like the chat itself."),
